@@ -66,6 +66,8 @@ const msg=document.getElementById("message");
 let player;
 let bullets;
 let enemies;
+let boss;
+let nextBossScore;
 let keys={};
 let score;
 let scoreTimer;
@@ -85,6 +87,9 @@ function restart(){
 
     bullets=[];
     enemies=[];
+    boss=null;
+    nextBossScore=1000;
+
     score=0;
     scoreTimer=0;
     enemyTimer=0;
@@ -109,7 +114,7 @@ document.addEventListener("keyup",e=>{
 
 function spawnEnemy(){
 
-    const size=20+Math.random()*35;
+    const size=40+Math.random()*40;
 
     enemies.push({
         x:Math.random()*(canvas.width-size),
@@ -121,21 +126,37 @@ function spawnEnemy(){
     });
 }
 
+function spawnBoss(){
+
+    boss={
+        x:canvas.width/2-140,
+        y:40,
+        w:280,
+        h:90,
+        hp:250,
+        maxHp:250,
+        speed:2,
+        dir:1
+    };
+
+    nextBossScore+=1000;
+}
+
 function shoot(){
 
     bullets.push({
         x:player.x,
-        y:player.y-18,
-        r:5,
-        speed:11
+        y:player.y-25,
+        w:6,
+        h:30,
+        speed:14
     });
 }
 
 function update(){
 
-    if(gameOver) return;
+    if(gameOver)return;
 
-    // Score
     scoreTimer++;
     if(scoreTimer>=3){
         score++;
@@ -144,7 +165,6 @@ function update(){
 
     ui.textContent="Score: "+score;
 
-    // Movement
     if(keys.ArrowLeft||keys.KeyA)
         player.x-=player.speed;
 
@@ -154,33 +174,68 @@ function update(){
     player.x=Math.max(player.w/2,
         Math.min(canvas.width-player.w/2,player.x));
 
-    // Shooting
-    if(player.cooldown>0) player.cooldown--;
+    if(player.cooldown>0)player.cooldown--;
 
     if(keys.Space && player.cooldown===0){
         shoot();
-        player.cooldown=10;
+        player.cooldown=8;
     }
 
-    // Spawn enemies
-    enemyTimer++;
-    let spawnRate=Math.max(15,50-score/80);
+    if(!boss){
 
-    if(enemyTimer>=spawnRate){
-        spawnEnemy();
-        enemyTimer=0;
+        enemyTimer++;
+
+        let spawnRate=Math.max(15,50-score/80);
+
+        if(enemyTimer>=spawnRate){
+            spawnEnemy();
+            enemyTimer=0;
+        }
+
+        if(score>=nextBossScore){
+            enemies=[];
+            spawnBoss();
+        }
     }
 
-    // Bullets
     for(let i=bullets.length-1;i>=0;i--){
 
         bullets[i].y-=bullets[i].speed;
 
-        if(bullets[i].y<-20)
+        if(bullets[i].y<-40)
             bullets.splice(i,1);
     }
 
-    // Enemies
+    if(boss){
+
+        boss.x+=boss.speed*boss.dir;
+
+        if(boss.x<20 || boss.x+boss.w>canvas.width-20)
+            boss.dir*=-1;
+
+        for(let i=bullets.length-1;i>=0;i--){
+
+            let b=bullets[i];
+
+            if(
+                b.x>boss.x &&
+                b.x<boss.x+boss.w &&
+                b.y-b.h<boss.y+boss.h &&
+                b.y>boss.y
+            ){
+
+                bullets.splice(i,1);
+                boss.hp--;
+
+                if(boss.hp<=0){
+                    boss=null;
+                    score+=500;
+                    break;
+                }
+            }
+        }
+    }
+
     for(let i=enemies.length-1;i>=0;i--){
 
         let e=enemies[i];
@@ -192,7 +247,6 @@ function update(){
             msg.style.display="block";
         }
 
-        // Bullet collision
         for(let j=bullets.length-1;j>=0;j--){
 
             let b=bullets[j];
@@ -200,8 +254,8 @@ function update(){
             if(
                 b.x>e.x &&
                 b.x<e.x+e.w &&
-                b.y>e.y &&
-                b.y<e.y+e.h
+                b.y-b.h<e.y+e.h &&
+                b.y>e.y
             ){
                 enemies.splice(i,1);
                 bullets.splice(j,1);
@@ -229,7 +283,7 @@ function draw(){
 
     drawStars();
 
-    // Player
+    // PLAYER
     ctx.save();
     ctx.translate(player.x,player.y);
 
@@ -250,22 +304,23 @@ function draw(){
 
     ctx.restore();
 
-    // Bullets
-    ctx.fillStyle="yellow";
-    bullets.forEach(b=>{
-        ctx.beginPath();
-        ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-        ctx.fill();
+    // BLASTS
+    ctx.fillStyle="#ffe800";
+    ctx.shadowColor="yellow";
+    ctx.shadowBlur=18;
 
-        ctx.shadowBlur=20;
-        ctx.shadowColor="yellow";
-        ctx.beginPath();
-        ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-        ctx.fill();
-        ctx.shadowBlur=0;
+    bullets.forEach(b=>{
+        ctx.fillRect(
+            b.x-b.w/2,
+            b.y-b.h,
+            b.w,
+            b.h
+        );
     });
 
-    // Enemies
+    ctx.shadowBlur=0;
+
+    // ENEMIES
     enemies.forEach(e=>{
 
         ctx.save();
@@ -277,28 +332,62 @@ function draw(){
         ctx.ellipse(0,0,e.w/2,e.h/3,0,0,Math.PI*2);
         ctx.fill();
 
-        ctx.fillRect(-e.w*0.35,-5,e.w*0.7,10);
+        ctx.fillRect(-e.w*.35,-5,e.w*.7,10);
 
-        ctx.beginPath();
-        ctx.arc(-e.w*0.15,0,3,0,Math.PI*2);
-        ctx.arc(e.w*0.15,0,3,0,Math.PI*2);
         ctx.fillStyle="white";
+        ctx.beginPath();
+        ctx.arc(-e.w*.15,0,4,0,Math.PI*2);
+        ctx.arc(e.w*.15,0,4,0,Math.PI*2);
         ctx.fill();
 
         ctx.restore();
     });
+
+    // BOSS
+    if(boss){
+
+        ctx.fillStyle="#6622cc";
+        ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
+
+        ctx.fillStyle="#bb55ff";
+        ctx.fillRect(
+            boss.x+20,
+            boss.y+15,
+            boss.w-40,
+            boss.h-30
+        );
+
+        ctx.fillStyle="red";
+        ctx.fillRect(
+            boss.x,
+            boss.y-20,
+            boss.w,
+            12
+        );
+
+        ctx.fillStyle="lime";
+        ctx.fillRect(
+            boss.x,
+            boss.y-20,
+            boss.w*(boss.hp/boss.maxHp),
+            12
+        );
+
+        ctx.fillStyle="white";
+        ctx.font="20px Arial";
+        ctx.fillText("BOSS",boss.x+boss.w/2-25,boss.y-28);
+    }
+
 }
 
 function loop(){
 
     update();
     draw();
-
     requestAnimationFrame(loop);
 }
 
 loop();
-
 </script>
 
 </body>
