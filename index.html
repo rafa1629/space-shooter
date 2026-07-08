@@ -114,14 +114,14 @@ document.addEventListener("keyup",e=>{
 
 function spawnEnemy(){
 
-    const size = 300 + Math.random() * 60;
+    const size = 200 + Math.random() * 60;
 
     enemies.push({
         x:Math.random()*(canvas.width-size),
         y:-size,
         w:size,
         h:size,
-        speed:0.3+Math.random()*1+score/1400,
+        speed:0.5+Math.random()*1+score/1400,
         color:`hsl(${Math.random()*360},80%,60%)`
     });
 }
