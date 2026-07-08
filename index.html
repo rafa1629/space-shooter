@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Space Shooter</title>
+<style>
+html,body{
+    margin:0;
+    overflow:hidden;
+    background:#000;
+    font-family:Arial,sans-serif;
+}
+canvas{
+    display:block;
+    background:radial-gradient(circle at center,#111,#000);
+}
+#ui{
+    position:absolute;
+    left:15px;
+    top:10px;
+    color:white;
+    font-size:24px;
+    user-select:none;
+}
+#message{
+    position:absolute;
+    width:100%;
+    top:40%;
+    text-align:center;
+    color:white;
+    font-size:48px;
+    display:none;
+}
+#message small{
+    display:block;
+    margin-top:20px;
+    font-size:24px;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">Score: 0</div>
+
+<div id="message">
+GAME OVER
+<small>Press SPACE to Restart</small>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+}
+window.addEventListener("resize",resize);
+resize();
+
+const ui=document.getElementById("ui");
+const msg=document.getElementById("message");
+
+let player;
+let bullets;
+let enemies;
+let keys={};
+let score;
+let scoreTimer;
+let enemyTimer;
+let gameOver;
+
+function restart(){
+
+    player={
+        x:canvas.width/2,
+        y:canvas.height-60,
+        w:40,
+        h:35,
+        speed:7,
+        cooldown:0
+    };
+
+    bullets=[];
+    enemies=[];
+    score=0;
+    scoreTimer=0;
+    enemyTimer=0;
+    gameOver=false;
+
+    msg.style.display="none";
+}
+
+restart();
+
+document.addEventListener("keydown",e=>{
+    keys[e.code]=true;
+
+    if(gameOver && e.code==="Space"){
+        restart();
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.code]=false;
+});
+
+function spawnEnemy(){
+
+    const size=20+Math.random()*35;
+
+    enemies.push({
+        x:Math.random()*(canvas.width-size),
+        y:-size,
+        w:size,
+        h:size,
+        speed:1+Math.random()*2+score/700,
+        color:`hsl(${Math.random()*360},80%,60%)`
+    });
+}
+
+function shoot(){
+
+    bullets.push({
+        x:player.x,
+        y:player.y-18,
+        r:5,
+        speed:11
+    });
+}
+
+function update(){
+
+    if(gameOver) return;
+
+    // Score
+    scoreTimer++;
+    if(scoreTimer>=3){
+        score++;
+        scoreTimer=0;
+    }
+
+    ui.textContent="Score: "+score;
+
+    // Movement
+    if(keys.ArrowLeft||keys.KeyA)
+        player.x-=player.speed;
+
+    if(keys.ArrowRight||keys.KeyD)
+        player.x+=player.speed;
+
+    player.x=Math.max(player.w/2,
+        Math.min(canvas.width-player.w/2,player.x));
+
+    // Shooting
+    if(player.cooldown>0) player.cooldown--;
+
+    if(keys.Space && player.cooldown===0){
+        shoot();
+        player.cooldown=10;
+    }
+
+    // Spawn enemies
+    enemyTimer++;
+    let spawnRate=Math.max(15,50-score/80);
+
+    if(enemyTimer>=spawnRate){
+        spawnEnemy();
+        enemyTimer=0;
+    }
+
+    // Bullets
+    for(let i=bullets.length-1;i>=0;i--){
+
+        bullets[i].y-=bullets[i].speed;
+
+        if(bullets[i].y<-20)
+            bullets.splice(i,1);
+    }
+
+    // Enemies
+    for(let i=enemies.length-1;i>=0;i--){
+
+        let e=enemies[i];
+
+        e.y+=e.speed;
+
+        if(e.y>canvas.height){
+            gameOver=true;
+            msg.style.display="block";
+        }
+
+        // Bullet collision
+        for(let j=bullets.length-1;j>=0;j--){
+
+            let b=bullets[j];
+
+            if(
+                b.x>e.x &&
+                b.x<e.x+e.w &&
+                b.y>e.y &&
+                b.y<e.y+e.h
+            ){
+                enemies.splice(i,1);
+                bullets.splice(j,1);
+                break;
+            }
+        }
+    }
+}
+
+function drawStars(){
+
+    for(let i=0;i<120;i++){
+
+        let x=(i*1237)%canvas.width;
+        let y=(i*761+performance.now()*0.03)%canvas.height;
+
+        ctx.fillStyle="rgba(255,255,255,.5)";
+        ctx.fillRect(x,y,2,2);
+    }
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawStars();
+
+    // Player
+    ctx.save();
+    ctx.translate(player.x,player.y);
+
+    ctx.fillStyle="#4FC3FF";
+
+    ctx.beginPath();
+    ctx.moveTo(0,-22);
+    ctx.lineTo(-18,18);
+    ctx.lineTo(-8,10);
+    ctx.lineTo(0,18);
+    ctx.lineTo(8,10);
+    ctx.lineTo(18,18);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle="#8ff";
+    ctx.fillRect(-5,-10,10,16);
+
+    ctx.restore();
+
+    // Bullets
+    ctx.fillStyle="yellow";
+    bullets.forEach(b=>{
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.shadowBlur=20;
+        ctx.shadowColor="yellow";
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur=0;
+    });
+
+    // Enemies
+    enemies.forEach(e=>{
+
+        ctx.save();
+        ctx.translate(e.x+e.w/2,e.y+e.h/2);
+
+        ctx.fillStyle=e.color;
+
+        ctx.beginPath();
+        ctx.ellipse(0,0,e.w/2,e.h/3,0,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.fillRect(-e.w*0.35,-5,e.w*0.7,10);
+
+        ctx.beginPath();
+        ctx.arc(-e.w*0.15,0,3,0,Math.PI*2);
+        ctx.arc(e.w*0.15,0,3,0,Math.PI*2);
+        ctx.fillStyle="white";
+        ctx.fill();
+
+        ctx.restore();
+    });
+}
+
+function loop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+
+</script>
+
+</body>
+</html>
